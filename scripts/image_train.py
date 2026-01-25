@@ -4,6 +4,7 @@ Train a diffusion model on images.
 import os
 import argparse
 import json
+import wandb
 
 from composable_diffusion import dist_util, logger
 from composable_diffusion.image_datasets import load_data
@@ -20,6 +21,13 @@ from composable_diffusion.train_util import TrainLoop
 def main():
     args = create_argparser().parse_args()
     use_captions = args.use_captions
+
+    wandb.init(  
+        project="composable-diffusion",  
+        name=f"{args.dataset}_{args.image_size}",  
+        config=args_to_dict(args, model_and_diffusion_defaults().keys())  
+    ) 
+
 
     dist_util.setup_dist()
     log_folder = f'./logs_{args.dataset}_{args.image_size}'
@@ -68,6 +76,7 @@ def main():
         schedule_sampler=schedule_sampler,
         weight_decay=args.weight_decay,
         lr_anneal_steps=args.lr_anneal_steps,
+        wandb_run=wandb.run,
     ).run_loop()
 
 

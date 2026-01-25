@@ -47,6 +47,7 @@ class TrainLoop:
             schedule_sampler=None,
             weight_decay=0.0,
             lr_anneal_steps=0,
+            wandb_run=None,
     ):
         self.dataset = dataset
         self.model = model
@@ -68,6 +69,7 @@ class TrainLoop:
         self.schedule_sampler = schedule_sampler or UniformSampler(diffusion)
         self.weight_decay = weight_decay
         self.lr_anneal_steps = lr_anneal_steps
+        self.wandb_run = wandb_run
 
         self.step = 0
         self.resume_step = 0
@@ -300,6 +302,12 @@ class TrainLoop:
         if self.use_fp16:
             logger.logkv("lg_loss_scale", self.lg_loss_scale)
 
+        if self.wandb_run and dist.get_rank() == 0:  
+            # 从logger获取最近的loss值  
+            log_dict = logger.getkvs()
+            if log_dict:  
+                self.wandb_run.log(log_dict)
+
     def save(self):
         def save_checkpoint(rate, params):
             state_dict = self._master_params_to_state_dict(params)
@@ -307,8 +315,16 @@ class TrainLoop:
                 logger.log(f"saving model {rate}...")
                 if not rate:
                     filename = f"model{(self.step + self.resume_step):06d}.pt"
+
+                    old_filename = f"model{(self.step + self.resume_step - self.save_interval):06d}.pt"
+                    if bf.exists(bf.join(get_blob_logdir(), old_filename)):
+                        bf.remove(bf.join(get_blob_logdir(), old_filename))
                 else:
                     filename = f"ema_{rate}_{(self.step + self.resume_step):06d}.pt"
+
+                    old_filename = f"ema_{rate}_{(self.step + self.resume_step - self.save_interval):06d}.pt"
+                    if bf.exists(bf.join(get_blob_logdir(), old_filename)):
+                        bf.remove(bf.join(get_blob_logdir(), old_filename))
                 with bf.BlobFile(bf.join(get_blob_logdir(), filename), "wb") as f:
                     th.save(state_dict, f)
 
@@ -317,11 +333,16 @@ class TrainLoop:
             save_checkpoint(rate, params)
 
         if dist.get_rank() == 0:
+            logger.log("saving optimizer...")
             with bf.BlobFile(
                     bf.join(get_blob_logdir(), f"opt{(self.step + self.resume_step):06d}.pt"),
                     "wb",
             ) as f:
                 th.save(self.opt.state_dict(), f)
+            
+            optimizer_old_filename = f"opt{(self.step + self.resume_step - self.save_interval):06d}.pt"
+            if bf.exists(bf.join(get_blob_logdir(), optimizer_old_filename)):
+                bf.remove(bf.join(get_blob_logdir(), optimizer_old_filename))
 
         dist.barrier()
 

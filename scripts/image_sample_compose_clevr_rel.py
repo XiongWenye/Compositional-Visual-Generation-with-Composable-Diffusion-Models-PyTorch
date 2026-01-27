@@ -68,7 +68,7 @@ class CLEVRRelDataset(Dataset):
         self.resolution = resolution
         self.random_crop = random_crop
         self.random_flip = random_flip
-        self.data_path = './dataset/clevr_training_data_128.npz'
+        self.data_path = './dataset/clevr_generation_1_relations.npz'
 
         data = np.load(self.data_path)
         self.labels = data['labels']
@@ -122,7 +122,7 @@ class CLEVRRelDataset(Dataset):
 
 
 dataset = CLEVRRelDataset(128, random_crop=False, random_flip=False)
-labels = th.tensor([[[2, 0, 5, 1, 0, 0, 0, 2, 0, 1, 0], [2, 0, 5, 1, 0, 2, 0, 2, 0, 1, 5]]]).long()
+labels = th.tensor([[ [2, 0, 5, 1, 0, 2, 0, 2, 0, 1, 5]]]).long()
 print(dataset.convert_caption(labels[0]))
 
 batch_size = 1
@@ -141,8 +141,8 @@ masks = [True] * len(labels) + [False]
 labels = th.cat((labels + [th.zeros_like(labels[0])]), dim=0)
 
 weights = args.weights
-assert len(weights) == 1 or len(weights) == len(masks) - 1, \
-    "the number of weights should be the same as the number of prompts."
+#assert len(weights) == 1 or len(weights) == len(masks) - 1, \
+#    "the number of weights should be the same as the number of prompts."
 
 batch_size = 1
 weights = th.tensor(weights).reshape(-1, 1, 1, 1).to(device)
@@ -183,4 +183,4 @@ for i in range(number_images):
 
 samples = ((th.cat(all_samples, dim=0) + 1) * 127.5).round().clamp(0, 255).to(th.uint8).cpu() / 255.
 grid = make_grid(samples, nrow=int(samples.shape[0] ** 0.5), padding=0)
-save_image(grid, f'clevr_rel_{options["image_size"]}_{guidance_scale}.png')
+save_image(grid, f'clevr_rel_{options["image_size"]}_weights_{weights[0].item()}.png')
